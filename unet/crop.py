@@ -15,10 +15,8 @@ def prepareImg(image_name,target_size = (256,256),as_gray = True):
     img = np.reshape(img,(1,)+img.shape)
     return img
 
-def crop_img(filename):
+def crop_img(filename, model):
     img = prepareImg(f"tmp/{filename}.jpg")
-    model = unet_model.unet()
-    model.load_weights("unet/unet_people.hdf5")
     result = model.predict(img)[0]
     result = np.reshape(result, result.shape[:-1])
     result = np.array(255*result, dtype=np.uint8)
@@ -33,3 +31,4 @@ def crop_img(filename):
     out = cv2.bitwise_and(original_img, original_img, mask=img_mask)
     out = np.dstack([out, 255*img_mask])
     cv2.imwrite(f"tmp/out-{filename}.png",out)
+    return
