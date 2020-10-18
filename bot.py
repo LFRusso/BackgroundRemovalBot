@@ -2,10 +2,17 @@ from telegram.ext import Updater, CommandHandler
 import logging
 import os
 import numpy as np
-from unet import crop as unet
+from u2net import crop as u2net
+import torch
+import os
 
-MODEL = unet.unet_model.unet()
-MODEL.load_weights("unet/unet_people.hdf5")
+#MODEL = unet.unet_model.unet()
+#MODEL.load_weights("unet/unet_people.hdf5")
+
+MODEL = u2net.U2NET(3,1)
+MODEL.load_state_dict(torch.load("u2net/u2net.pth", map_location=torch.device('cpu')))
+MODEL.eval()
+
 
 def start(update, context):
     message = "Hi, @{}! Type /help to see the commands \o/.".format(update.effective_user.username)
@@ -15,7 +22,7 @@ def help(update, context):
     message = """
     Comandos: 
     /help: Display commands
-    /crop: Use the command replying to a photo with a persont in it
+    /crop: Use the command replying to a photo to remove it's background
     """    
     context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
@@ -23,7 +30,9 @@ def help(update, context):
 def crop(update, context):
     media = update.message.reply_to_message.photo[0]
     if (media == None): return
-    if (media.file_size > 18412): return
+    if (media.file_size > 84120): 
+        context.bot.send_message(chat_id=update.effective_chat.id, text="Photo is too big, try downscalig it")
+        return
     
     context.bot.send_message(chat_id=update.effective_chat.id, text="Loading...")
 
@@ -32,9 +41,9 @@ def crop(update, context):
 
     fname = media_id
     imgFile.download(f"tmp/{fname}.jpg")
-    unet.crop_img(fname, MODEL)
+    u2net.crop_img(fname, MODEL)
     os.remove(f"tmp/{fname}.jpg")
-    context.bot.sendPhoto(chat_id=update.effective_chat.id, photo=open(f"tmp/out-{fname}.png", 'rb'))
+    context.bot.sendDocument(chat_id=update.effective_chat.id, document=open(f"tmp/out-{fname}.png", 'rb'))
     os.remove(f"tmp/out-{fname}.png")
     return
 
