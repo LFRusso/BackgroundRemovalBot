@@ -1,4 +1,4 @@
-from telegram.ext import Updater, CommandHandler, ConversationHandler, CallbackQueryHandler
+from telegram.ext import Updater, CommandHandler, ConversationHandler, CallbackQueryHandler, MessageHandler, Filters
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 import logging
 import os
@@ -22,30 +22,34 @@ def start(update, context):
 
 def help(update, context):
     message = """
-    Comandos: 
+    Commands:
     /help: Display commands
-    /crop: Use the command replying to a photo to remove its background
+    /crop: Send a photo then click the button to remove its background
     """    
     context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
 def crop(update, context):
-    keyboard = [[InlineKeyboardButton(text="Remove the background", callback_data='crop')]]
-    markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
-    text_id = context.bot.send_message(chat_id=update.effective_chat.id, text="Send a photo and click the button below:", reply_markup=markup)
-    context.bot_data['text_id'] = text_id.message_id
-
+    context.bot.send_message(chat_id=update.effective_chat.id, text="Send a photo")
     return MEDIA
 
 def get_photo(update, context):
-    media = update.message.photo
+    media = context.bot.get_file(update.message.photo[-1])
+    
     if (media == None): return
     if (media.file_size > 84120): 
-        context.bot.send_message(chat_id=update.effective_chat.id, text="Photo is too big, try downscaling it")
+        error = "Photo is too big, try downscaling it"
+        context.bot.send_message(chat_id=update.effective_chat.id, text=error)
         return
     
+    keyboard = [[InlineKeyboardButton(text="Remove", callback_data='crop')]]
+    markup = InlineKeyboardMarkup(inline_keyboard=keyboard)
+    
+    prompt = "Click the button below to start the background removal"
+    text = context.bot.send_message(chat_id=update.effective_chat.id, text=prompt, reply_markup=markup)
+    context.bot_data['text_id'] = text.message_id
     context.bot_data['media'] = media
     
-    return ConversationHandler.END
+    return MEDIA
 
 def crop_query(update, context):
     query = update.callback_query
@@ -54,11 +58,10 @@ def crop_query(update, context):
     if query.data == 'crop':
         context.bot.edit_message_reply_markup(chat_id=query.message.chat_id, message_id=query.message.message_id)
         text_id = context.bot_data['text_id']
-        context.bot.delete_message(chat_id=update.effective_chat.id, message_id=text_id.message_id)
+        context.bot.delete_message(chat_id=update.effective_chat.id, message_id=text_id)
         context.bot.send_message(chat_id=update.effective_chat.id, text="Loading...")
 
-        media = context.bot_data['media']
-        media_id = media.file_id
+        media_id = context.bot_data['media'].file_id
         imgFile = context.bot.getFile(media_id)
 
         fname = media_id
@@ -87,8 +90,8 @@ def main():
     
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("crop", crop)],
-        states={MEDIA: get_photo},
-        fallbacks=CallbackQueryHandler(crop_query)
+        states={MEDIA: [MessageHandler(Filters.photo, get_photo)]},
+        fallbacks=[CallbackQueryHandler(crop_query)]
     )
     dp.add_handler(conv_handler)
 
