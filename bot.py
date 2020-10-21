@@ -16,10 +16,14 @@ MODEL.eval()
 
 MEDIA = range(1)
 
+# Starting the bot
 def start(update, context):
     message = "Hi, @{}! Type /help to see the commands \o/.".format(update.effective_user.username)
     context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
+    return
+
+# Displays available commands
 def help(update, context):
     message = """
     Commands:
@@ -28,13 +32,20 @@ def help(update, context):
     """    
     context.bot.send_message(chat_id=update.effective_chat.id, text=message)
 
+    return
+
+# Calling the crop function, which then goes to the get_photo function
 def crop(update, context):
-    context.bot.send_message(chat_id=update.effective_chat.id, text="Send a photo")
+    message = "Send a photo"
+    context.bot.send_message(chat_id=update.effective_chat.id, text=message)
+    
     return MEDIA
 
+# Saves the photo sent by the user and goes to the crop_query function, which processes the image
 def get_photo(update, context):
-    media = context.bot.get_file(update.message.photo[-1])
+    media = context.bot.get_file(update.message.photo[-1]) # Gets photo sent by user
     
+    # Checking if a photo was sent and, if so, its size
     if (media == None): return
     if (media.file_size > 84120): 
         error = "Photo is too big, try downscaling it"
@@ -46,30 +57,32 @@ def get_photo(update, context):
     
     prompt = "Click the button below to start the background removal"
     text = context.bot.send_message(chat_id=update.effective_chat.id, text=prompt, reply_markup=markup)
-    context.bot_data['text_id'] = text.message_id
-    context.bot_data['media'] = media
+    context.bot_data['text_id'] = text.message_id # Saving the text id for posterior exclusion
+    context.bot_data['media'] = media # Saving the photo data for further processing
     
     return MEDIA
 
+# Processing image sent by user
 def crop_query(update, context):
     query = update.callback_query
     query.answer()
 
     if query.data == 'crop':
-        context.bot.edit_message_reply_markup(chat_id=query.message.chat_id, message_id=query.message.message_id)
+        context.bot.edit_message_reply_markup(chat_id=query.message.chat_id, message_id=query.message.message_id) # Deleting the button
         text_id = context.bot_data['text_id']
-        context.bot.delete_message(chat_id=update.effective_chat.id, message_id=text_id)
+        context.bot.delete_message(chat_id=update.effective_chat.id, message_id=text_id) # Deleting the message attached to the button
         context.bot.send_message(chat_id=update.effective_chat.id, text="Loading...")
 
+        # Saving and processing the image
         media_id = context.bot_data['media'].file_id
         imgFile = context.bot.getFile(media_id)
 
         fname = media_id
         imgFile.download(f"tmp/{fname}.jpg")
-        u2net.crop_img(fname, MODEL)
-        os.remove(f"tmp/{fname}.jpg")
+        u2net.crop_img(fname, MODEL) # Cropping the background
+        os.remove(f"tmp/{fname}.jpg") # Removing original image
         context.bot.sendDocument(chat_id=update.effective_chat.id, document=open(f"tmp/out-{fname}.png", 'rb'))
-        os.remove(f"tmp/out-{fname}.png")
+        os.remove(f"tmp/out-{fname}.png") # Removing cropped image
     
     return
 
@@ -88,10 +101,11 @@ def main():
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))    
     
+    # Handler for the crop function, calling what's needed in a definite order
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("crop", crop)],
-        states={MEDIA: [MessageHandler(Filters.photo, get_photo)]},
-        fallbacks=[CallbackQueryHandler(crop_query)]
+        entry_points=[CommandHandler("crop", crop)], # User types '/crop'
+        states={MEDIA: [MessageHandler(Filters.photo, get_photo)]}, # User sends an image
+        fallbacks=[CallbackQueryHandler(crop_query)] # Image is processed
     )
     dp.add_handler(conv_handler)
 
