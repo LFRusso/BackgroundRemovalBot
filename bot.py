@@ -84,7 +84,7 @@ def crop_query(update, context):
         context.bot.sendDocument(chat_id=update.effective_chat.id, document=open(f"tmp/out-{fname}.png", 'rb'))
         os.remove(f"tmp/out-{fname}.png") # Removing cropped image
     
-    return
+    return ConversationHandler.END
 
 
 def main():
